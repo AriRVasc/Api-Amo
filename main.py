@@ -1,46 +1,30 @@
-from fastapi import FastAPI, HTTPException
-#classe do framework FastAPI que representa a aplicação web. 
-# Ela é usada para criar rotas e definir as operações que a aplicação suportará.
-#É uma classe do FastAPI que permite lançar exceções HTTP personalizadas. 
+# Importação da classe FastAPI do módulo fastapi
+from fastapi import FastAPI
 
+# Importação da classe BluetoothData do módulo models
+from models import BluetoothData
 
-from cachetools import TTLCache
-import uvicorn
+# Importação da classe DataProcessor do módulo data_processor
+from data_processor import DataProcessor
 
+# Criação de uma instância da classe FastAPI
 app = FastAPI()
 
-# Criação de um objeto TTLCache para armazenar os dados em cache
-# maxsize define o número máximo de entradas em cache, ttl define o tempo de vida em segundos
-cache = TTLCache(maxsize=100, ttl=300)  # Armazena até 100 entradas com tempo de vida de 300 segundos (5 minutos)
+# Criação de uma instância da classe DataProcessor
+data_processor = DataProcessor()
 
-# Dicionário vazio para armazenar as temperaturas recebidas de diferentes microcontroladores
-temperaturas = {}
+# Definição de rota POST para o endpoint '/receber_dados_bluetooth'
+@app.post('/receber_dados_bluetooth')
+async def receber_dados_bluetooth(data: BluetoothData):
+    data_processor.process_data(data)  # Chama o método process_data da instância de DataProcessor
+    return {"message": "Dados recebidos com sucesso"}  # Retorna uma mensagem de sucesso
 
-# Definição da rota que aceita solicitações POST para '/temperatura'
-@app.post('/temperatura')
-def receber_temperatura(dados: dict):
-    microcontrolador_id = dados.get('microcontrolador_id')
-    temperatura = dados.get('temperatura')
+# Definição de rota GET para o endpoint '/get_temperature/{id}'
+@app.get('/get_temperature/{id}')
+async def get_temperature(id: int):
+    temperature = data_processor.get_temperature(id)  # Chama o método get_temperature da instância de DataProcessor
+    if temperature is not None:
+        return {"id": id, "temperature": temperature}  # Retorna um JSON com o ID e a temperatura
+    else:
+        return {"message": "Sem dados de temperatura para o ID fornecido"}  # Retorna uma mensagem se não houver temperatura para o ID
 
-    if microcontrolador_id is None or temperatura is None:
-        raise HTTPException(status_code=400, detail='Dados incompletos')
-
-    # Armazenamento da temperatura associada ao ID do microcontrolador no dicionário
-    temperaturas[microcontrolador_id] = temperatura
-
-    # Armazenamento dos dados no cache, usando o ID do microcontrolador como chave
-    cache[microcontrolador_id] = temperatura
-
-    # Resposta com mensagem de sucesso em formato JSON
-    return {'message': 'Dados de temperatura recebidos com sucesso!'}
-
-# Definição da rota que aceita solicitações GET para '/temperaturas'
-@app.get('/temperaturas')
-def listar_temperaturas():
-    # Criação de uma cópia dos dados em cache e conversão para um dicionário
-    cache_data = dict(cache)
-    # Retorno dos dados em cache em formato JSON
-    return cache_data
-
-if __name__ == '__main__':
-    uvicorn.run(app, host='127.0.0.1', port=8000)
